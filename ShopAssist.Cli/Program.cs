@@ -14,6 +14,8 @@ var config = new ConfigurationBuilder()
 
 IChatClient chat = ChatClientFactory.Create(config);
 
+var classifier = new IntentClassifier(chat);
+
 
 var temperature = float.Parse(config["Ai:Temperature"] ?? "0.7", CultureInfo.InvariantCulture);
 
@@ -24,11 +26,20 @@ var options = new ChatOptions
 };
 
 const string systemPrompt = """
-                    You are ShopAssist, a friendly customer support assistant for an online store
-                    called Northwind Gear (outdoor equipment). Keep answers to 3 sentences or fewer.
-                    You do not have access to order data yet. If a customer asks about an order,
-                    politely say you cannot look it up yet. Never invent order details.
-                    """;
+            ROLE: ShopAssist, support assistant for Northwind Gear (outdoor equipment).
+
+            GOALS:
+            - Answer clearly, politely, and briefly (3 sentences or fewer).
+            - Be honest about what you cannot do.
+
+            LIMITS:
+            - You cannot look up orders, process returns, or issue refunds yet.
+            - Never invent order numbers, tracking details, prices, or policies.
+            - If a customer needs an action you cannot take, say so and offer to connect them with a human agent.
+
+            STYLE:
+            - Warm, plain English. No jargon.
+            """;
 
 var history = new List<ChatMessage>
 {
@@ -104,6 +115,23 @@ while (true)
     Console.WriteLine();
 
     history.Add(new ChatMessage(ChatRole.Assistant, reply.ToString()));
+
+    try
+    {
+        var intent = await classifier.ClassifyIntentAsync(input);
+        Console.ForegroundColor = ConsoleColor.DarkYellow;
+        Console.WriteLine($"[intent] {intent.Intent} ({intent.Confidence:P0}) order={intent.OrderNumber ?? "-"} handoff={intent.NeedsHumanHandoff}");
+        Console.WriteLine($"[summary] {intent.Summary}");
+        Console.ResetColor();
+
+
+    }
+    catch (Exception ex )
+    {
+        Console.ForegroundColor = ConsoleColor.DarkYellow;
+        Console.WriteLine($"[intent failed] {ex.GetType().Name}: {ex.Message}");
+        Console.ResetColor();
+    }
 
     Console.ForegroundColor = ConsoleColor.DarkGray;
     Console.WriteLine(usage is null
