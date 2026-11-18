@@ -66,7 +66,7 @@ while (true)
         Console.WriteLine($"[intent] {intent.Intent} ({intent.Confidence:P0}) order={intent.OrderNumber ?? "-"}");
         Console.ResetColor();
 
-        var reply = await agent.AnswerMessageAsync(history, trace: msg =>
+        var result = await agent.RunAsync(history, trace: msg =>
         {
             Console.ForegroundColor = ConsoleColor.DarkMagenta;
             Console.WriteLine(msg);
@@ -74,7 +74,9 @@ while (true)
         });
 
         Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"ShopAssist: {reply}");
+        Console.WriteLine($"ShopAssist: {result.Reply}");
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"[steps: {result.Steps}, tool calls: {result.ToolCalls}, limit hit: {result.HitLimit}]");
         Console.ResetColor();
     }
     catch (Exception ex)

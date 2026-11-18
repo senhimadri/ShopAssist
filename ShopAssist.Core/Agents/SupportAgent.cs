@@ -3,11 +3,16 @@ using System.Text.Json;
 
 namespace ShopAssist.Core.Agents;
 
+public sealed record AgentRunResult(string Reply, int Steps, int ToolCalls, bool HitLimit);
+
 public class SupportAgent
 {
     private readonly IChatClient _chat;
     private readonly IReadOnlyDictionary<string, AIFunction> _toolsByName;
     private readonly ChatOptions _options;
+
+    public int MaxSteps { get; set; } = 6;
+    public int MaxToolCalls { get; set; } = 10;
 
     public SupportAgent(IChatClient chat, IReadOnlyList<AIFunction> tools)
     {
@@ -20,6 +25,59 @@ public class SupportAgent
             Tools = tools.Cast<AITool>().ToList()
         };
     }
+    /// <summary>
+    /// The agent loop: think, act, observe, repeat until the model answers in plain text
+    /// or a safety limit is reached. The history list is owned by the agent from here on.
+    /// </summary>
+    /// 
+    public async Task<AgentRunResult> RunAsync(List<ChatMessage> history,Action<string>? trace = null, CancellationToken cancellationToken = default)
+    {
+        int steps = 0;
+        int toolCalls = 0;
+
+        while(true)
+        {
+            // Think : ask the model what to do next, given everything it has seen so far.
+
+            if (steps >= MaxSteps)
+                return new AgentRunResult(Reply: "(The agent hit the maximum number of steps.)", Steps: steps, ToolCalls: toolCalls, HitLimit: true);
+
+            steps++;
+
+            var response = await _chat.GetResponseAsync(history, _options, cancellationToken);
+
+            // Act : if the model wants to call a tool, do it and add the result to the history.
+            history.AddRange(response.Messages);
+
+            var calls = response.Messages
+                                .SelectMany(m => m.Contents)
+                                .OfType<FunctionCallContent>()
+                                .ToList();
+
+            if (calls.Count == 0)
+                return new AgentRunResult(Reply: response.Text, Steps: steps, ToolCalls: toolCalls, HitLimit: false);
+
+            foreach (var call in calls)
+            {
+                if (toolCalls >= MaxToolCalls)
+                {
+                    trace?.Invoke("[limit] tool-call budget exhausted");
+                    return new AgentRunResult(Reply: "(The agent hit the maximum number of tool calls.)", Steps: steps, ToolCalls: toolCalls, HitLimit: true);
+                }
+
+                toolCalls++;
+
+                var output = await RunToolAsync(call, cancellationToken);
+                trace?.Invoke($"[step {steps}] {call.Name}({JsonSerializer.Serialize(call.Arguments)}) -> {JsonSerializer.Serialize(output)}");
+
+                history.Add(new ChatMessage(ChatRole.Tool, [new FunctionResultContent(call.CallId, output)]));
+            }
+
+            // Loop again: the model now sees the results and decides what to do next.
+        }
+    }
+
+
 
     /// <summary>
     /// Answers the latest user message. The history list is owned by the agent

@@ -4,15 +4,9 @@ using System.ComponentModel;
 
 namespace ShopAssist.Core.Tools;
 
-
-public sealed record OrderStatusResult(
-                                bool Found,
-                                string Message,
-                                string? Status = null,
-                                string? TrackingNumber = null,
-                                string? DeliveredOn = null);
-
+public sealed record OrderStatusResult(bool Found,string Message,string? Status = null,string? TrackingNumber = null,string? DeliveredOn = null);
 public sealed record ReturnPolicy(int WindowDays, bool MustBeUnused);
+public sealed record DeliveryEstimate(string OrderNumber, string EstimatedDelivery, string Note);
 
 
 public sealed class ShopTools(IStoreRepository store)
@@ -57,13 +51,33 @@ public sealed class ShopTools(IStoreRepository store)
         return new ReturnPolicy(WindowDays: 30, MustBeUnused: true);
     }
 
+    [Description("Estimate the delivery date for an order that has shipped but not yet been delivered. Returns null if the order is not in transit.")]
+    public DeliveryEstimate? EstimateDelivery(
+        [Description("The order number, digits only, for example 1042")] string orderNumber)
+    {
+        var cleanedOrderNumber = new string(orderNumber.Where(char.IsDigit).ToArray());
+        var order = store.FindOrder(cleanedOrderNumber);
+        if (order is null || order.Status != OrderStatus.Shipped)
+            return null;
+        // For demonstration purposes, we'll just say that shipped orders take 5 days to arrive.
+        var estimatedDelivery = order.PlacedOn.AddDays(4);
+
+        return new DeliveryEstimate(
+            OrderNumber: cleanedOrderNumber,
+            EstimatedDelivery: estimatedDelivery.ToString("yyyy-MM-dd"),
+            Note: "This is an estimate. Actual delivery may vary.");
+    }
+
+
+
+
 
     // Convert our C# methods into AI tools the model can see and call.
     public IReadOnlyList<AIFunction> AsAIFunctions() =>
         [
             AIFunctionFactory.Create(GetOrderStatus),
             AIFunctionFactory.Create(SearchProducts),
-            AIFunctionFactory.Create(FuzzySearchProducts)
+            AIFunctionFactory.Create(FuzzySearchProducts),
+            AIFunctionFactory.Create(EstimateDelivery)
         ];
-
 }
