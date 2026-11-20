@@ -30,7 +30,8 @@ public class SupportAgent
     /// or a safety limit is reached. The history list is owned by the agent from here on.
     /// </summary>
     /// 
-    public async Task<AgentRunResult> RunAsync(List<ChatMessage> history,Action<string>? trace = null, CancellationToken cancellationToken = default)
+    public async Task<AgentRunResult> RunAsync(List<ChatMessage> history,
+        Action<string>? trace = null, CancellationToken cancellationToken = default)
     {
         int steps = 0;
         int toolCalls = 0;

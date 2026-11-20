@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.AI;
+using ShopAssist.Core.Memory;
 using ShopAssist.Core.Store;
 using System.ComponentModel;
 
@@ -9,7 +10,7 @@ public sealed record ReturnPolicy(int WindowDays, bool MustBeUnused);
 public sealed record DeliveryEstimate(string OrderNumber, string EstimatedDelivery, string Note);
 
 
-public sealed class ShopTools(IStoreRepository store)
+public sealed class ShopTools(IStoreRepository store, CustomerMemoryStore memory, string customerId)
 {
     [Description("Look up the status, tracking number and delivery date of a customer's order by its order number.")]
     public OrderStatusResult GetOrderStatus(
@@ -41,13 +42,13 @@ public sealed class ShopTools(IStoreRepository store)
 
     [Description("Search the product catalog by name, keyword, or tag. Tolerates spelling mistakes, plurals, and partial words. Returns matching products with price and stock status, best matches first. Use this whenever the customer asks about a product, even if the wording is informal.")]
     public IReadOnlyList<Product> FuzzySearchProducts(
-    [Description("Product words from the customer's message, in any spelling, for example 'tent', 'trekking poles', or 'hiking shelter'. Do not add words the customer did not say.")] string query)
+        [Description("Product words from the customer's message, in any spelling, for example 'tent', 'trekking poles', or 'hiking shelter'. Do not add words the customer did not say.")] string query)
          => store.SearchProductsByFuzzySearch(query);
 
     [Description("Get the shop's return policy: how many days a customer has to return an item, and whether the item must be unused. Call this for any question about returns, refunds, or exchanges.")]
     public ReturnPolicy GetReturnPolicy()
     {
-        Console.WriteLine("[tool] GetReturnPolicy called");   // proof the tool ran
+        Console.WriteLine("[tool] GetReturnPolicy called"); 
         return new ReturnPolicy(WindowDays: 30, MustBeUnused: true);
     }
 
@@ -57,6 +58,7 @@ public sealed class ShopTools(IStoreRepository store)
     {
         var cleanedOrderNumber = new string(orderNumber.Where(char.IsDigit).ToArray());
         var order = store.FindOrder(cleanedOrderNumber);
+
         if (order is null || order.Status != OrderStatus.Shipped)
             return null;
         // For demonstration purposes, we'll just say that shipped orders take 5 days to arrive.
@@ -68,9 +70,14 @@ public sealed class ShopTools(IStoreRepository store)
             Note: "This is an estimate. Actual delivery may vary.");
     }
 
-
-
-
+    [Description("Save a durable customer preference or fact for future visits, such as preferred contact method or delivery address. Do not use for order questions.")]
+    public string RememberCustomerFact(
+        [Description("Short snake_case name, for example preferred_contact")] string key,
+        [Description("The fact value, for example 'email'")] string value)
+    {
+        memory.Remember(customerId, key, value);
+        return $"Saved: {key} = {value}";
+    }
 
     // Convert our C# methods into AI tools the model can see and call.
     public IReadOnlyList<AIFunction> AsAIFunctions() =>
@@ -78,6 +85,8 @@ public sealed class ShopTools(IStoreRepository store)
             AIFunctionFactory.Create(GetOrderStatus),
             AIFunctionFactory.Create(SearchProducts),
             AIFunctionFactory.Create(FuzzySearchProducts),
-            AIFunctionFactory.Create(EstimateDelivery)
+            AIFunctionFactory.Create(EstimateDelivery),
+            AIFunctionFactory.Create(GetReturnPolicy),
+            AIFunctionFactory.Create(RememberCustomerFact)
         ];
 }

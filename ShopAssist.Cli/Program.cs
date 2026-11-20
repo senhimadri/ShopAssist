@@ -2,30 +2,52 @@
 using Microsoft.Extensions.Configuration;
 using ShopAssist.Core;
 using ShopAssist.Core.Agents;
+using ShopAssist.Core.Memory;
 using ShopAssist.Core.Store;
 using ShopAssist.Core.Tools;
 
 
 var config = new ConfigurationBuilder()
-    .SetBasePath(AppContext.BaseDirectory)
-    .AddJsonFile("appsettings.json", optional: false)
-    .AddEnvironmentVariables()   // env vars override the file, e.g. Ai__Temperature=1.5
-    .Build();
+                    .SetBasePath(AppContext.BaseDirectory)
+                    .AddJsonFile("appsettings.json", optional: false)
+                    .AddEnvironmentVariables()   // env vars override the file, e.g. Ai__Temperature=1.5
+                    .Build();
 
 
 IChatClient chat = ChatClientFactory.Create(config);
+
 var classifier = new IntentClassifier(chat);
+var extractor = new CustomerMemoryExtractor(chat);
+var compactor = new ConversationCompactor(chat);
 
 var store = new InMemoryStoreRepository();
-var agent = new SupportAgent(chat, new ShopTools(store).AsAIFunctions());
 
-const string systemPrompt = """
+using var memory = new CustomerMemoryStore("shopassist.db");
+
+// Hard-coded for the course. Day 12 replaces this with real authentication.
+const string customerId = "cust-001";
+
+var tools = new ShopTools(store, memory, customerId).AsAIFunctions();
+var agent = new SupportAgent(chat, tools);
+
+// Load remembered facts at session start and place them in the system prompt.
+var rememberedFacts = memory.Recall(customerId);
+
+var factsText = rememberedFacts.Count == 0
+    ? "No remembered facts for this customer yet."
+    : string.Join("\n", rememberedFacts.Select(f => $"- {f.Key}: {f.Value}"));
+
+var systemPrompt = $"""
     ROLE: ShopAssist, support assistant for Northwind Gear (outdoor equipment).
 
     GOALS:
     - Answer clearly, politely, and briefly (3 sentences or fewer).
     - For order or product facts, call a tool. Never guess order details or prices.
     - If a tool returns nothing, say so and suggest the customer double-check the number.
+    - Use the remembered customer facts below when they are relevant. Do not mention them unless useful.
+
+    REMEMBERED FACTS:
+    {factsText}
 
     LIMITS:
     - You cannot process returns or refunds yet.
@@ -37,7 +59,9 @@ const string systemPrompt = """
 
 var history = new List<ChatMessage> { new(ChatRole.System, systemPrompt) };
 
+
 Console.WriteLine("ShopAssist ready. Try: 'Where is order 1042?'   Commands: /reset  /exit");
+
 while (true)
 {
     Console.ForegroundColor = ConsoleColor.Cyan;
@@ -61,10 +85,31 @@ while (true)
 
     try
     {
+        // Long-term memory: pull durable facts out of what the customer just said.
+        try
+        {
+            foreach (var fact in await extractor.ExtractAsync(input))
+            {
+                memory.Remember(customerId, fact.Key, fact.Value);
+                Console.ForegroundColor = ConsoleColor.Blue;
+                Console.WriteLine($"[remembered] {fact.Key} = {fact.Value}");
+                Console.ResetColor();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine($"[memory extract skipped] {ex.Message}");
+            Console.ResetColor();
+        }
+
         var intent = await classifier.ClassifyIntentAsync(input);
         Console.ForegroundColor = ConsoleColor.DarkYellow;
         Console.WriteLine($"[intent] {intent.Intent} ({intent.Confidence:P0}) order={intent.OrderNumber ?? "-"}");
         Console.ResetColor();
+
+        await compactor.CompactIfNeededAsync(history);
+
 
         var result = await agent.RunAsync(history, trace: msg =>
         {
