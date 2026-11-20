@@ -25,7 +25,6 @@ public static class ChatClientFactory
                 $"Unknown Ai:Provider '{provider}'. Use 'Ollama' or 'GitHubModels'.")
         };
     }
-
     private static IChatClient CreateOllama(IConfiguration config)
     {
         var endpoint = config["Ai:Ollama:Endpoint"] ?? "http://localhost:11434";
@@ -34,7 +33,6 @@ public static class ChatClientFactory
         // OllamaApiClient implements IChatClient
         return new OllamaApiClient(new Uri(endpoint), model);
     }
-
     private static IChatClient CreateGitHubModels(IConfiguration config)
     {
         var token = config["GITHUB_TOKEN"]
@@ -48,5 +46,11 @@ public static class ChatClientFactory
             new OpenAIClientOptions { Endpoint = new Uri("https://models.github.ai/inference") });
 
         return client.GetChatClient(model).AsIChatClient();
+    }
+    public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbedder(IConfiguration config)
+    {
+        var endpoint = config["Ai:Ollama:Endpoint"] ?? "http://localhost:11434";
+        var model = config["Ai:Ollama:EmbeddingModel"] ?? "nomic-embed-text";
+        return new OllamaApiClient(new Uri(endpoint), model);
     }
 }

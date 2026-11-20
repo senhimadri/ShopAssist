@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using ShopAssist.Cli;
 using ShopAssist.Core;
 using ShopAssist.Core.Agents;
 using ShopAssist.Core.Memory;
@@ -12,6 +13,13 @@ var config = new ConfigurationBuilder()
                     .AddJsonFile("appsettings.json", optional: false)
                     .AddEnvironmentVariables()   // env vars override the file, e.g. Ai__Temperature=1.5
                     .Build();
+
+if (args.Contains("--policy-demo"))
+{
+    var embedder = ChatClientFactory.CreateEmbedder(config);
+    await PolicyDemo.RunAsync(embedder, Path.Combine(AppContext.BaseDirectory, "Knowledge", "policies.md"));
+    return;
+}
 
 
 IChatClient chat = ChatClientFactory.Create(config);
