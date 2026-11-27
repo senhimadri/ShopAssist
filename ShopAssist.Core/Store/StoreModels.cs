@@ -1,11 +1,10 @@
 ﻿namespace ShopAssist.Core.Store;
 
-
 public enum OrderStatus { Processing, Shipped, Delivered, Cancelled }
 
 public sealed record OrderLine(
-        string ProductName, 
-        int Quantity, 
+        string ProductName,
+        int Quantity,
         decimal UnitPrice);
 
 public sealed record Order(

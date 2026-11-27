@@ -13,7 +13,6 @@ public static class AutoSupportAgent
             .UseFunctionInvocation(configure: c => c.MaximumIterationsPerRequest = 6)
             .Build();
 
-
     public static ChatOptions Options(IReadOnlyList<AIFunction> tools) => new()
     {
         Temperature = 0.3f,

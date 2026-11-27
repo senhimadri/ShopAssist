@@ -3,7 +3,6 @@ using System.Text.Json;
 
 namespace ShopAssist.Core.Memory;
 
-
 public sealed record ExtractedFact(string Key, string Value);
 
 public sealed class CustomerMemoryExtractor(IChatClient chat)

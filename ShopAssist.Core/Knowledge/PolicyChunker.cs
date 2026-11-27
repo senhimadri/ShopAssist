@@ -1,6 +1,4 @@
-﻿using static System.Collections.Specialized.BitVector32;
-
-namespace ShopAssist.Core.Knowledge;
+﻿namespace ShopAssist.Core.Knowledge;
 
 public sealed record PolicyChunk(string Id, string Title, string Section, string Text);
 
@@ -12,14 +10,13 @@ public static class PolicyChunker
 {
     public static IReadOnlyList<PolicyChunk> Chunk(string markdown)
     {
-        var chunks  = new List<PolicyChunk>();
+        var chunks = new List<PolicyChunk>();
 
         string docTitle = "Untitled";
 
         string? sectionTitle = null;
 
         var body = new List<string>();
-
 
         void Flush()
         {
@@ -58,7 +55,7 @@ public static class PolicyChunker
         return chunks;
     }
 
-    private static string Slug(string s) => 
+    private static string Slug(string s) =>
         new string(s.ToLowerInvariant()
                     .Select(c => char.IsLetterOrDigit(c) ? c : '-')
                     .ToArray())

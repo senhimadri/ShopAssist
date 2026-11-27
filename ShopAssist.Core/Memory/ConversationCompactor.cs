@@ -2,7 +2,6 @@
 
 namespace ShopAssist.Core.Memory;
 
-
 /// <summary>
 /// Short-term memory: keeps the history within a size budget.
 /// When the history grows too long, older turns are replaced by one summary message.
@@ -15,8 +14,7 @@ public sealed class ConversationCompactor(IChatClient chat, int maxMessages = 12
     /// Compacts the history in place. Keeps the system prompt at index 0,
     /// then one summary message, then the most recent messages.
     /// </summary>
-    /// 
-    public async Task CompactIfNeededAsync(List<ChatMessage> history , CancellationToken cancellationToken = default)
+    public async Task CompactIfNeededAsync(List<ChatMessage> history, CancellationToken cancellationToken = default)
     {
         if (history.Count <= maxMessages) return;
 
@@ -41,7 +39,7 @@ public sealed class ConversationCompactor(IChatClient chat, int maxMessages = 12
             new (ChatRole.User, transcript)
         };
 
-        var summaryResponse = await chat.GetResponseAsync( summaryPrompt,
+        var summaryResponse = await chat.GetResponseAsync(summaryPrompt,
                             new ChatOptions { Temperature = 0f, MaxOutputTokens = 200 },
                             cancellationToken: cancellationToken);
 

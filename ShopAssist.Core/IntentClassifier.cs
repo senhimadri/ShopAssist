@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
 using ShopAssist.Core.Models;
 using System.Text.Json;
 
@@ -58,7 +57,6 @@ public sealed class IntentClassifier(IChatClient chat)
         });
 
         return intent ?? throw new InvalidOperationException("Model returned empty JSON.");
-
     }
 
     private static string ExtractJson(string text)
@@ -69,6 +67,4 @@ public sealed class IntentClassifier(IChatClient chat)
             throw new FormatException($"No JSON object found in model reply: {text}");
         return text[start..(end + 1)];
     }
-
-
 }

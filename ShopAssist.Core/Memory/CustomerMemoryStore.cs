@@ -2,7 +2,6 @@
 
 namespace ShopAssist.Core.Memory;
 
-
 /// <summary>
 /// Long-term memory: durable facts about a customer, stored in SQLite.
 /// Think of it as a small CRM table: one row per fact, keyed by customer.

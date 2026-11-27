@@ -19,7 +19,7 @@ public class SupportAgent
     {
         _chat = chat;
         _toolsByName = tools.ToDictionary(t => t.Name);
-        _options =  new ChatOptions
+        _options = new ChatOptions
         {
             Temperature = 0.3f,
             MaxOutputTokens = 400,
@@ -30,14 +30,13 @@ public class SupportAgent
     /// The agent loop: think, act, observe, repeat until the model answers in plain text
     /// or a safety limit is reached. The history list is owned by the agent from here on.
     /// </summary>
-    /// 
     public async Task<AgentRunResult> RunAsync(List<ChatMessage> history,
         Action<string>? trace = null, CancellationToken cancellationToken = default)
     {
         int steps = 0;
         int toolCalls = 0;
 
-        while(true)
+        while (true)
         {
             // Think : ask the model what to do next, given everything it has seen so far.
 
@@ -79,24 +78,20 @@ public class SupportAgent
         }
     }
 
-
-
     /// <summary>
     /// Answers the latest user message. The history list is owned by the agent
     /// from here on: it appends tool requests, tool results and the final reply.
     /// </summary>
-    /// 
     public async Task<string> AnswerMessageAsync(List<ChatMessage> history,
-                                                    Action<string>? trace = null, 
+                                                    Action<string>? trace = null,
                                                     CancellationToken cancellationToken = default)
     {
         var first = await _chat.GetResponseAsync(history, _options, cancellationToken);
 
         history.AddRange(first.Messages);
 
-
         var calls = first.Messages
-                        .SelectMany(m=>m.Contents)
+                        .SelectMany(m => m.Contents)
                         .OfType<FunctionCallContent>()
                         .ToList();
 
@@ -104,7 +99,7 @@ public class SupportAgent
             return first.Text;
 
         foreach (var call in calls)
-        {   
+        {
             var output = await RunToolAsync(call, cancellationToken);
 
             trace?.Invoke($"[tool] {call.Name}({JsonSerializer.Serialize(call.Arguments)}) -> {JsonSerializer.Serialize(output)}");
