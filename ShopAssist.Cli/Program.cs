@@ -4,6 +4,7 @@ using ShopAssist.Core;
 using ShopAssist.Core.Agents;
 using ShopAssist.Core.Knowledge;
 using ShopAssist.Core.Memory;
+using ShopAssist.Core.Planning;
 using ShopAssist.Core.Store;
 using ShopAssist.Core.Tools;
 
@@ -17,6 +18,7 @@ var config = new ConfigurationBuilder()
 IChatClient chat = ChatClientFactory.Create(config);
 
 var classifier = new IntentClassifier(chat);
+var planner = new Planner(chat);
 var extractor = new CustomerMemoryExtractor(chat);
 var compactor = new ConversationCompactor(chat);
 
@@ -126,6 +128,21 @@ while (true)
         Console.ResetColor();
 
         await compactor.CompactIfNeededAsync(history);
+
+        var plan = await planner.PlanAsync(input);
+
+        if (plan.NeedsPlan)
+        {
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
+            Console.WriteLine($"[plan] {plan.Goal}");
+
+            foreach (var s in plan.Steps)
+                Console.WriteLine($"       {s.Number}. {s.Goal}");
+
+            Console.ResetColor();
+
+            SupportAgent.AttachPlan(history, plan);
+        }
 
 
         var result = await agent.RunAsync(history, trace: msg =>

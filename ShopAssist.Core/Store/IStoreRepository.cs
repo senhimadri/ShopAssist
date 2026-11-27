@@ -16,7 +16,7 @@ public sealed class InMemoryStoreRepository : IStoreRepository
     private readonly Dictionary<string, Order> _orders = new()
     {
         ["1042"] = new Order(OrderNumber: "1042", Status: OrderStatus.Shipped, PlacedOn: new DateOnly(2026, 11, 12),
-            TrackingNumber: "NW-7741-0042", DeliveredOn: null, Lines: [new OrderLine("Trailhawk 2P Tent", 1, 249m)]),
+            TrackingNumber: "NW-7741-0042", DeliveredOn: new DateOnly(2026,11,16), Lines: [new OrderLine("Trailhawk 2P Tent", 1, 249m)]),
         ["2291"] = new Order(OrderNumber: "2291", Status: OrderStatus.Processing, PlacedOn: new DateOnly(2026, 11, 15),
             TrackingNumber: null, DeliveredOn: null, Lines: [new OrderLine("Frostline 20°F Sleeping Bag", 1, 180m)]),
         ["3300"] = new Order(OrderNumber: "3300", Status: OrderStatus.Delivered, PlacedOn: new DateOnly(2026, 11, 6),

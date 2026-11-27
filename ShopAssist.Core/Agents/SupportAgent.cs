@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.AI;
+using ShopAssist.Core.Planning;
 using System.Text.Json;
 
 namespace ShopAssist.Core.Agents;
@@ -85,7 +86,6 @@ public class SupportAgent
     /// from here on: it appends tool requests, tool results and the final reply.
     /// </summary>
     /// 
-
     public async Task<string> AnswerMessageAsync(List<ChatMessage> history,
                                                     Action<string>? trace = null, 
                                                     CancellationToken cancellationToken = default)
@@ -137,5 +137,26 @@ public class SupportAgent
             // Return the error to the model instead of crashing. It can then correct itself.
             return new { error = ex.Message };
         }
+    }
+
+    /// <summary>
+    /// Adds a plan to the conversation as guidance. The loop then works through it,
+    /// but the model still decides the exact tool calls.
+    /// </summary>
+    public static void AttachPlan(List<ChatMessage> history, Plan plan)
+    {
+        if (!plan.NeedsPlan || plan.Steps.Count == 0) return;
+
+        var lines = plan.Steps.Select(s =>
+            $"{s.Number}. {s.Goal}" + (s.DependsOn.Count > 0 ? $" (after step {string.Join(", ", s.DependsOn)})" : ""));
+
+        history.Add(new ChatMessage(ChatRole.System, $"""
+        PLAN for the current request ({plan.Goal}):
+        {string.Join("\n", lines)}
+
+        Work through the steps in order. Use the result of each step before starting the next.
+        If a step returns nothing useful, stop and explain what you could not confirm.
+        Only give the final answer after the last step is complete.
+        """));
     }
 }
