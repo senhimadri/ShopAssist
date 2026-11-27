@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
-using ShopAssist.Cli;
 using ShopAssist.Core;
 using ShopAssist.Core.Agents;
+using ShopAssist.Core.Knowledge;
 using ShopAssist.Core.Memory;
 using ShopAssist.Core.Store;
 using ShopAssist.Core.Tools;
@@ -13,14 +13,6 @@ var config = new ConfigurationBuilder()
                     .AddJsonFile("appsettings.json", optional: false)
                     .AddEnvironmentVariables()   // env vars override the file, e.g. Ai__Temperature=1.5
                     .Build();
-
-if (args.Contains("--policy-demo"))
-{
-    var embedder = ChatClientFactory.CreateEmbedder(config);
-    await PolicyDemo.RunAsync(embedder, Path.Combine(AppContext.BaseDirectory, "Knowledge", "policies.md"));
-    return;
-}
-
 
 IChatClient chat = ChatClientFactory.Create(config);
 
@@ -35,7 +27,25 @@ using var memory = new CustomerMemoryStore("shopassist.db");
 // Hard-coded for the course. Day 12 replaces this with real authentication.
 const string customerId = "cust-001";
 
-var tools = new ShopTools(store, memory, customerId).AsAIFunctions();
+var embedder = ChatClientFactory.CreateEmbedder(config);
+
+var policyIndex = new PolicyIndex(embedder);
+
+var policyText = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Knowledge", "policies.md"));
+
+await policyIndex.BuildAsync(PolicyChunker.Chunk(policyText));
+
+if (args.Contains("--check-gate"))
+{
+    foreach (var q in new[] { "Can I send my tent back?", "Do you price match?", "Is there a guarantee on the sleeping bag?" })
+    {
+        var hits = await policyIndex.SearchAsync(q, topK: 1);
+        Console.WriteLine($"{hits[0].Score,6:F3}  {(hits[0].Score >= 0.55f ? "PASS" : "BLOCK")}  {q}");
+    }
+}
+
+var tools = new ShopTools(store, memory, customerId, policyIndex).AsAIFunctions();
+
 var agent = new SupportAgent(chat, tools);
 
 // Load remembered facts at session start and place them in the system prompt.
@@ -66,7 +76,6 @@ var systemPrompt = $"""
     """;
 
 var history = new List<ChatMessage> { new(ChatRole.System, systemPrompt) };
-
 
 Console.WriteLine("ShopAssist ready. Try: 'Where is order 1042?'   Commands: /reset  /exit");
 
@@ -121,7 +130,8 @@ while (true)
 
         var result = await agent.RunAsync(history, trace: msg =>
         {
-            Console.ForegroundColor = ConsoleColor.DarkMagenta;
+            var color = msg.Contains("SearchPolicies") ? ConsoleColor.Yellow : ConsoleColor.DarkMagenta;
+            Console.ForegroundColor = color;
             Console.WriteLine(msg);
             Console.ResetColor();
         });

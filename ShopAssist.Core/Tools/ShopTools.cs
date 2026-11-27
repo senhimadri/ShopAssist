@@ -2,15 +2,18 @@
 using ShopAssist.Core.Memory;
 using ShopAssist.Core.Store;
 using System.ComponentModel;
+using ShopAssist.Core.Knowledge;
 
 namespace ShopAssist.Core.Tools;
 
 public sealed record OrderStatusResult(bool Found,string Message,string? Status = null,string? TrackingNumber = null,string? DeliveredOn = null);
 public sealed record ReturnPolicy(int WindowDays, bool MustBeUnused);
 public sealed record DeliveryEstimate(string OrderNumber, string EstimatedDelivery, string Note);
+public sealed record PolicySearchResult(bool Found,string Message,IReadOnlyList<PolicyCitation> Sources);
+public sealed record PolicyCitation(string Id, string Document, string Section, string Text, float Score);
 
 
-public sealed class ShopTools(IStoreRepository store, CustomerMemoryStore memory, string customerId)
+public sealed class ShopTools(IStoreRepository store, CustomerMemoryStore memory, string customerId, PolicyIndex policies)
 {
     [Description("Look up the status, tracking number and delivery date of a customer's order by its order number.")]
     public OrderStatusResult GetOrderStatus(
@@ -79,6 +82,26 @@ public sealed class ShopTools(IStoreRepository store, CustomerMemoryStore memory
         return $"Saved: {key} = {value}";
     }
 
+    [Description("Search the Northwind Gear returns, warranty and shipping policies. Use for any question about policy, returns, refunds, warranty, or delivery rules. Returns the most relevant policy sections with their source.")]
+    public async Task<PolicySearchResult> SearchPolicies(
+    [Description("The customer's question or the policy topic, in plain words")] string question)
+    {
+        const float MinScore = 0.55f;   // relevance gate, tuned on the Day 6 demo
+        var hits = await policies.SearchAsync(question, topK: 3);
+        var relevant = hits.Where(h => h.Score >= MinScore).ToList();
+
+        if (relevant.Count == 0)
+            return new PolicySearchResult(false,
+                "No policy section matched this question closely enough. Say you don't know and offer to connect the customer with a human agent.",
+                []);
+
+        var citations = relevant
+            .Select(h => new PolicyCitation(h.Chunk.Id, h.Chunk.Title, h.Chunk.Section, h.Chunk.Text, h.Score))
+            .ToList();
+
+        return new PolicySearchResult(true, "Relevant policy sections found. Cite the section names in your answer.", citations);
+    }
+
     // Convert our C# methods into AI tools the model can see and call.
     public IReadOnlyList<AIFunction> AsAIFunctions() =>
         [
@@ -87,6 +110,7 @@ public sealed class ShopTools(IStoreRepository store, CustomerMemoryStore memory
             AIFunctionFactory.Create(FuzzySearchProducts),
             AIFunctionFactory.Create(EstimateDelivery),
             AIFunctionFactory.Create(GetReturnPolicy),
-            AIFunctionFactory.Create(RememberCustomerFact)
+            AIFunctionFactory.Create(RememberCustomerFact),
+            AIFunctionFactory.Create(SearchPolicies)
         ];
 }
